@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>מעבדת מדידה – האם קיפאון והיתוך משנים את המסה?</title>
+<style>
+:root{--bg:#eef4f3;--card:#fff;--ink:#17323a;--mut:#5b7479;--acc:#0f7b8a;--acc2:#e07a1f;--ok:#2e8b57;--bad:#c0392b;--line:#cfe0e0;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1c20;--card:#17292e;--ink:#e6f1f2;--mut:#9ab4b8;--acc:#4fc3d4;--acc2:#f0a05a;--ok:#5cc58a;--bad:#ff7b6b;--line:#2c474d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Heebo","Assistant",Arial,sans-serif;line-height:1.6}
+.wrap{max-width:760px;margin:0 auto;padding:16px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.9rem;color:var(--mut)}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:10px 0 16px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+h1{font-size:1.5rem;margin:0 0 8px}h2{font-size:1.25rem;margin:0 0 10px}
+.opt{display:block;width:100%;text-align:right;padding:12px 14px;margin:8px 0;border:2px solid var(--line);border-radius:10px;background:transparent;color:var(--ink);font:inherit;cursor:pointer}
+.opt:hover{border-color:var(--acc)}.opt.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.nav{display:flex;justify-content:space-between;gap:10px;margin-top:14px}
+button.b{font:inherit;padding:10px 22px;border-radius:10px;border:0;background:var(--acc);color:#fff;cursor:pointer;font-weight:600}
+button.b.g{background:transparent;color:var(--ink);border:2px solid var(--line)}
+button.b:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc2);outline-offset:2px}
+.lab{display:grid;grid-template-columns:1fr 150px;gap:14px;align-items:end}
+canvas{width:100%;height:auto;background:color-mix(in srgb,var(--acc) 6%,var(--card));border:1px solid var(--line);border-radius:10px}
+.scale{border:2px solid var(--ink);border-radius:10px;padding:10px;text-align:center}
+.scale .n{font-size:1.6rem;font-weight:700;direction:ltr;font-variant-numeric:tabular-nums}
+.scale small{color:var(--mut)}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.95rem}
+th,td{border-bottom:1px solid var(--line);padding:6px;text-align:center}
+input[type=range]{width:100%;accent-color:var(--acc2)}
+.note{background:color-mix(in srgb,var(--acc2) 14%,transparent);border-radius:10px;padding:10px 12px;margin-top:10px}
+.fb{margin-top:8px;font-weight:600}
+footer{text-align:center;color:var(--mut);margin-top:18px;font-size:.9rem}
+@media(max-width:560px){.lab{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="top"><button class="b g" id="snd" style="padding:4px 12px">🔊 צלילים פועלים</button><span id="stepTxt"></span></div>
+ <div class="bar"><i id="prog"></i></div>
+ <div class="card" id="stage"></div>
+ <div class="nav"><button class="b g" id="back">חזרה</button><button class="b" id="next">המשך</button></div>
+ <footer>נוצר על ידי: מילכה ברקו גרש</footer>
+</div>
+<script>
+const M=148.6,N=54,CPR=18;let step=0,sound=true,pred={1:null,3:null},meas={f:[],m:[]},ac=null,raf,P=[];
+const $=id=>document.getElementById(id);
+function beep(f,d){if(!sound)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.06;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}}
+$('snd').onclick=()=>{sound=!sound;$('snd').textContent=sound?'🔊 צלילים פועלים':'🔇 צלילים כבויים';beep(600,.1)};
+const opts=[['grows','המסה גדלה'],['shrinks','המסה קטנה'],['same','המסה נשארת זהה']];
+function predView(k,q){return `<h2>${q}</h2>${opts.map(o=>`<button class="opt ${pred[k]===o[0]?'sel':''}" data-k="${k}" data-v="${o[0]}">${o[1]}</button>`).join('')}<p class="fb" id="fb"></p>`}
+const steps=[
+()=>`<h1>האם קיפאון והיתוך משנים את המסה?</h1>
+<p>במעבדה מתכוננים לשני ניסויים. בכל ניסוי הכלי <b>אטום לגמרי</b>, והוא מונח על מאזניים מדוייקים.<br>בתוך הכלי נמצא החומר: מים.</p>
+<p><b>ניסוי א׳ – קיפאון:</b> בכלי יש מים נוזליים. מקררים אותם עד שהם קופאים והופכים לקרח: מים במצב מוצק.</p>
+<p><b>ניסוי ב׳ – היתוך:</b> בכלי יש קרח (מים במצב מוצק). מחממים אותו עד שהוא מותך והופך למים במצב נוזל.</p>
+<div class="note">שאלת החקר: מה קורה למסת הנוזל כשהוא קופא? ומה קורה למסת המוצק כשהוא נמס?</div>`,
+()=>predView(1,'ניבוי לניסוי א׳: כשהנוזל קופא ונהפך למוצק, מה יקרה למסה שמראים המאזניים?'),
+()=>sim('f'),
+()=>predView(3,'ניבוי לניסוי ב׳: כשהמוצק נמס ונהפך לנוזל, מה יקרה למסה שמראים המאזניים?'),
+()=>sim('m'),
+()=>`<h2>סיכום המסקנות</h2>
+<table><tr><th>ניסוי</th><th>מסה לפני</th><th>מסה אחרי</th></tr>
+<tr><td>קיפאון</td><td>${M} גרם</td><td>${M} גרם</td></tr><tr><td>היתוך</td><td>${M} גרם</td><td>${M} גרם</td></tr></table>
+<p>בקיפאון ובהיתוך החלקיקים לא נעלמים ולא נוספים. הם רק משנים את הסידור שלהם ואת אופן התנועה שלהם. לכן <b>המסה נשמרת</b>.</p>
+<div class="note"><b>למה לפעמים נדמה שהמסה השתנתה?</b> בכלי פתוח, מים יכולים להתאדות ממנו, ואדי מים מהאוויר יכולים להתעבות ולקפוא עליו. המאזניים ישתנו, כי חלקיקים נכנסו או יצאו. בכלי אטום אף חלקיק לא נכנס ולא יוצא.</div>
+<p>מה דעתך: איך היית בודק זאת בניסוי עם כלי פתוח?</p>`
+];
+function sim(m){const f=m==='f';return `<h2>${f?'ניסוי א׳: קיפאון של מים':'ניסוי ב׳: היתוך של קרח'}</h2>
+<p>${f?'הזיזו את המחוון כדי לקרר את הכלי. שימו לב למה קורה לטמפרטורה בזמן שהמים קופאים.':'הזיזו את המחוון כדי לחמם את הכלי. שימו לב למה קורה לטמפרטורה בזמן שהקרח מותך.'} לחצו על ״מדידה״ בכל שלב ורשמו את קריאת המאזניים.</p>
+<div class="lab"><canvas id="cv" width="420" height="300" aria-label="כלי אטום עם חלקיקי מים"></canvas>
+<div class="scale"><small>מאזניים</small><div class="n">${M.toFixed(1)} g</div><small id="ph"></small></div></div>
+<label>טמפרטורה: <b id="tv" style="direction:ltr;display:inline-block;font-variant-numeric:tabular-nums">${f?10:-10}°C</b><input type="range" id="sl" min="0" max="100" value="0"></label>
+<button class="b" id="meas" style="margin-top:8px">מדידה</button>
+<table><thead><tr><th>מצב החומר</th><th>טמפרטורה</th><th>מסה</th></tr></thead><tbody id="tb"></tbody></table>
+<p class="fb" id="fb"></p>`}
+const slot=i=>[38+(i%CPR)*20,262-Math.floor(i/CPR)*20];
+function startSim(m){const fz=m==='f',x=$('cv').getContext('2d'),sl=$('sl');
+ P=Array.from({length:N},(_,i)=>{const s=slot(i);return fz?{i,x:40+Math.random()*320,y:215+Math.random()*55,vx:0,vy:0}:{i,x:s[0],y:s[1],vx:0,vy:0}});
+ const ink=getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+ const table=()=>{$('tb').innerHTML=meas[m].map(r=>`<tr><td>${r[0]}</td><td>${r[1]}°C</td><td>${M.toFixed(1)} g</td></tr>`).join('')};table();
+ function sf(){const v=+sl.value;if(fz)return v<=35?0:v<=65?(v-35)/30:1;return v<=35?1:v<=65?1-(v-35)/30:0}
+ function temp(){const v=+sl.value;if(v>=35&&v<=65)return 0;
+  if(fz)return v<35?Math.max(1,Math.round(10-10*v/35)):Math.min(-1,Math.round(-10*(v-65)/35));
+  return v<35?Math.min(-1,Math.round(-10+10*v/35)):Math.max(1,Math.round(10*(v-65)/35))}
+ let cool=fz,pv=0,last=-1;
+ function label(){return temp()===0?(cool?'קיפאון: מוצק ונוזל':'היתוך: מוצק ונוזל'):sf()>.5?'מוצק':'נוזל'}
+ sl.oninput=()=>{const v=+sl.value;if(v!==pv){cool=fz?v>pv:v<pv;pv=v}const f=sf();$('ph').textContent=label();$('tv').textContent=temp()+'°C';if(Math.abs(f*10|0)!==last){last=f*10|0;beep(300+f*500,.05)}};
+ sl.oninput();
+ $('meas').onclick=()=>{meas[m].push([label(),temp()]);beep(800,.12);table();
+  if(meas[m].length>=3)$('fb').textContent='המסה נשארה '+M.toFixed(1)+' גרם בכל המדידות, בכל מצב צבירה.'};
+ function frame(){x.clearRect(0,0,420,300);x.strokeStyle=ink;x.lineWidth=3;x.strokeRect(20,20,380,260);
+  const s=sf(),nS=Math.round(s*N),nL=N-nS,fl=272-(s*N/CPR)*20,top=fl-nL*400/364;
+  const Sd=P.filter(p=>p.i<nS),Lq=P.filter(p=>p.i>=nS);
+  for(let k=0;k<4;k++){
+   for(let a=0;a<Lq.length;a++)for(let b=a+1;b<Lq.length;b++){const A=Lq[a],B=Lq[b],dx=B.x-A.x,dy=B.y-A.y,d=Math.hypot(dx,dy)||.01;if(d<16){const q=(16-d)/2/d;A.x-=dx*q;A.y-=dy*q;B.x+=dx*q;B.y+=dy*q}}
+   Lq.forEach(A=>Sd.forEach(B=>{const dx=A.x-B.x,dy=A.y-B.y,d=Math.hypot(dx,dy)||.01;if(d<16){const q=(16-d)/d;A.x+=dx*q;A.y+=dy*q}}))}
+  Lq.forEach(p=>{p.x=Math.min(392,Math.max(28,p.x));p.y=Math.min(fl,Math.max(top,p.y))});
+  P.forEach(p=>{
+   if(p.i<nS){const t=slot(p.i);p.x+=(t[0]-p.x)*.2+(Math.random()-.5)*.7;p.y+=(t[1]-p.y)*.2+(Math.random()-.5)*.7;p.vx=p.vy=0}
+   else{p.a=(p.a||0)+(Math.random()-.5)*.8;const k=fz?.35:.5;p.vx+=Math.cos(p.a)*k+(Math.random()-.5)*.5;p.vy+=Math.sin(p.a)*k*.5+(Math.random()-.5)*.5+.2;p.vx*=.8;p.vy*=.8;
+    p.x=Math.min(392,Math.max(28,p.x+p.vx));p.y=Math.min(fl,Math.max(top,p.y+p.vy))}
+   x.beginPath();x.arc(p.x,p.y,6,0,7);x.fillStyle='#5ec4f0';x.fill();x.strokeStyle='#2b8cc0';x.lineWidth=1;x.stroke()});
+  raf=requestAnimationFrame(frame)}
+ cancelAnimationFrame(raf);frame()}
+function render(){cancelAnimationFrame(raf);$('stage').innerHTML=steps[step]();
+ $('prog').style.width=((step+1)/steps.length*100)+'%';$('stepTxt').textContent=`שלב ${step+1} מתוך ${steps.length}`;
+ $('back').disabled=step===0;$('next').textContent=step===steps.length-1?'מההתחלה':'המשך';
+ $('next').disabled=(step===1&&!pred[1])||(step===3&&!pred[3])||(step===2&&meas.f.length<3)||(step===4&&meas.m.length<3);
+ document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{pred[b.dataset.k]=b.dataset.v;
+  document.querySelectorAll('.opt').forEach(o=>o.classList.remove('sel'));
+  b.classList.add('sel');$('fb').textContent='הניבוי נרשם. נבדוק אותו בניסוי.';beep(500,.1);$('next').disabled=false});
+ if(step===2)startSim('f');if(step===4)startSim('m');
+ if(step===2||step===4){const m=step===2?'f':'m';const t=setInterval(()=>{if(!$('meas')){clearInterval(t);return}$('next').disabled=meas[m].length<3},300)}}
+$('next').onclick=()=>{if(step===steps.length-1){step=0;pred={1:null,3:null};meas={f:[],m:[]}}else step++;beep(520,.08);render()};
+$('back').onclick=()=>{if(step>0){step--;render()}};
+render();
+</script>
+</body>
+</html>
